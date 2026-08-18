@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Design tokens — values are final (hifi handoff). See README "Design tokens".
+   ========================================================================== */
+/* Colors are stored as space-separated RGB *channels* so Tailwind can apply
+   opacity modifiers to any token (rgb(var(--x) / <alpha-value>)). Inline usage
+   must wrap them: rgb(var(--primary)). */
+:root {
+  --primary: 37 99 235; /* #2563EB */
+  --primary-hover: 29 78 216; /* #1D4ED8 */
+  --primary-soft: 234 241 255; /* #EAF1FF */
+  --accent: 242 101 34; /* #F26522 */
+
+  --ink: 23 32 42; /* #17202A */
+  --ink-deep: 15 23 32; /* #0F1720 */
+
+  --text-body: 104 112 124; /* #68707C */
+  --text-muted: 152 161 174; /* #98A1AE */
+  --text-on-dark: 143 155 172; /* #8F9BAC */
+  --text-on-dark-2: 169 180 196; /* #A9B4C4 */
+
+  --surface: 255 255 255; /* #FFFFFF */
+  --bg-app: 247 249 252; /* #F7F9FC */
+  --bg-page: 238 241 246; /* #EEF1F6 */
+
+  --border: 230 235 242; /* #E6EBF2 */
+  --border-strong: 223 229 238; /* #DFE5EE */
+  --border-input: 211 219 230; /* #D3DBE6 */
+
+  --success: 39 174 96; /* #27AE60 */
+  --success-on-dark: 123 224 165; /* #7BE0A5 */
+  --warning-on-dark: 251 191 107; /* #FBBF6B */
+
+  --overlay-white-08: rgba(255, 255, 255, 0.08);
+  --overlay-white-18: rgba(255, 255, 255, 0.18);
+}
+
+/* Dark mode (Configuración → modo oscuro). Panels that are intentionally dark
+   in both themes (auth aside, sidebar) use --ink-deep directly and are unaffected. */
+[data-theme="dark"] {
+  --surface: 20 27 36; /* #141B24 */
+  --bg-app: 15 23 32; /* #0F1720 */
+  --bg-page: 11 17 25; /* #0B1119 */
+  --ink: 242 245 249; /* #F2F5F9 */
+  --text-body: 169 180 196; /* #A9B4C4 */
+  --text-muted: 123 135 152; /* #7B8798 */
+  --border: 38 49 63; /* #26313F */
+  --border-strong: 45 57 71; /* #2D3947 */
+  --border-input: 51 63 78; /* #333F4E */
+  --primary-soft: 22 35 58; /* #16233A */
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg-page text-ink font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Accessibility: visible keyboard focus ring (README "Foco"). */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--primary));
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: rgb(var(--primary-soft));
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted;
+  }
+  .card {
+    @apply rounded-card border border-border-strong bg-surface shadow-card;
+  }
+  /* Loading skeleton block — exact-shape placeholders, never a page spinner. */
+  .skeleton {
+    @apply animate-m90pulse rounded-[10px] bg-border;
+  }
+}
+
+/* Custom range/number affordances stay minimal; hide number spinners. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
