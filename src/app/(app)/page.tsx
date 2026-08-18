@@ -260,7 +260,7 @@ function DemoStateSwitcher({
           onClick={() => onChange(o.v)}
           className={cn(
             "rounded-seg px-2.5 py-1 font-bold transition-colors",
-            value === o.v ? "bg-ink text-white" : "text-body hover:text-ink",
+            value === o.v ? "bg-ink text-surface" : "text-body hover:text-ink",
           )}
         >
           {o.label}

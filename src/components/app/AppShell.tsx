@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { NAV, PRIMARY_NAV, navByHref } from "@/lib/nav";
 import { mockUser, mockDashboard } from "@/lib/mock";
 import { Logo } from "@/components/ui/Logo";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { IconBell, IconClose, IconMenu, IconSearch } from "@/components/icons";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -60,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <button
           aria-label="Cerrar"
           onClick={closeAll}
-          className="fixed inset-0 z-40 bg-ink/40 backdrop-blur-[1px]"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
         />
       )}
       <Drawer open={navOpen} activeHref={active.href} onClose={closeAll} />
@@ -166,6 +167,8 @@ function TopBar({
         <IconSearch className="h-[18px] w-[18px]" />
         <span>Buscar…</span>
       </div>
+
+      <ThemeToggle />
 
       <button
         onClick={onNotif}

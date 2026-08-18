@@ -29,7 +29,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={manrope.variable}>
-      <body>{children}</body>
+      <body>
+        {/* Aplica el tema guardado antes de pintar el contenido (evita el flash). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('m90-theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t}}catch(e){}`,
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

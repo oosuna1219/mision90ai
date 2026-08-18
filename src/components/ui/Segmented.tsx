@@ -40,7 +40,7 @@ export function Segmented<T extends string | number>({
             onClick={() => onChange(opt.value)}
             className={cn(
               "rounded-seg px-3.5 py-2 text-[13px] font-bold transition-colors duration-200 ease-out",
-              active ? "bg-ink text-white" : "text-body hover:text-ink",
+              active ? "bg-ink text-surface" : "text-body hover:text-ink",
             )}
           >
             {opt.label}
