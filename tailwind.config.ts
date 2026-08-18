@@ -43,6 +43,12 @@ const config: Config = {
         },
         "warning-on-dark": withAlpha("--warning-on-dark"),
       },
+      // Breakpoints nominales del handoff (390 / 834 / 1440), disponibles como
+      // `tablet:` y `desktop:` además de los defaults de Tailwind.
+      screens: {
+        tablet: "834px",
+        desktop: "1440px",
+      },
       fontFamily: {
         sans: ["var(--font-manrope)", "system-ui", "sans-serif"],
       },

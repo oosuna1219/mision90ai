@@ -1,0 +1,23 @@
+{
+  "name": "Misión 90 AI",
+  "short_name": "Misión 90",
+  "description": "90 días de acompañamiento de salud: peso, ayuno, hábitos y un coach de IA.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1720",
+  "theme_color": "#0f1720",
+  "icons": [
+    {
+      "src": "/logos/logo-mark.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logos/logo-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

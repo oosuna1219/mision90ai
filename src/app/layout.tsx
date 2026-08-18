@@ -10,10 +10,23 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Misión 90 AI",
+  title: {
+    default: "Misión 90 AI",
+    template: "%s · Misión 90 AI",
+  },
+  applicationName: "Misión 90 AI",
   description:
     "90 días de acompañamiento de salud: peso, medidas, ayuno, hábitos y un coach de IA que lee tus registros reales.",
-  icons: { icon: "/logos/logo-mark.png" },
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/logos/logo-mark.png",
+    apple: "/logos/logo-mark.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Misión 90",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
