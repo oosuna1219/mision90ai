@@ -15,14 +15,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!EMAIL_RE.test(email)) return setError("Escribe un correo válido.");
     if (password.length < 8) return setError("La contraseña tiene mínimo 8 caracteres.");
     setError(null);
-    // TODO: POST /auth/login. Prototipo: entra directo a la app.
-    router.push("/");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "No pudimos iniciar sesión.");
+        return;
+      }
+      router.push("/");
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -73,8 +90,8 @@ export default function LoginPage() {
           </p>
         ) : null}
 
-        <Button type="submit" fullWidth>
-          Entrar
+        <Button type="submit" fullWidth disabled={loading}>
+          {loading ? "Entrando…" : "Entrar"}
         </Button>
       </form>
 

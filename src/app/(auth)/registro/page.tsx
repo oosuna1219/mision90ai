@@ -23,8 +23,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (name.trim().length < 2) return setError("Escribe tu nombre.");
     if (!EMAIL_RE.test(email)) return setError("Escribe un correo válido.");
@@ -33,8 +34,24 @@ export default function RegisterPage() {
       return setError("La contraseña necesita 8+ caracteres, una mayúscula y un número.");
     if (!accepted) return setError("Acepta los términos para continuar.");
     setError(null);
-    // TODO: POST /auth/register → arranca el onboarding.
-    router.push("/onboarding");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, whatsapp, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "No pudimos crear tu cuenta.");
+        return;
+      }
+      router.push("/onboarding");
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -109,8 +126,8 @@ export default function RegisterPage() {
           </p>
         ) : null}
 
-        <Button type="submit" fullWidth>
-          Crear cuenta
+        <Button type="submit" fullWidth disabled={loading}>
+          {loading ? "Creando…" : "Crear cuenta"}
         </Button>
       </form>
 

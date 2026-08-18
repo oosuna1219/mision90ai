@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
@@ -17,6 +18,7 @@ const NOTIFICATIONS = [
 ];
 
 export default function ConfiguracionPage() {
+  const router = useRouter();
   const [notifs, setNotifs] = useState(NOTIFICATIONS);
   const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
   const [lengthUnit, setLengthUnit] = useState<"cm" | "in">("cm");
@@ -93,7 +95,15 @@ export default function ConfiguracionPage() {
           <Button variant="secondary" fullWidth className="justify-start">
             Política de privacidad
           </Button>
-          <Button variant="secondary" fullWidth className="justify-start">
+          <Button
+            variant="secondary"
+            fullWidth
+            className="justify-start"
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              router.push("/login");
+            }}
+          >
             Cerrar sesión
           </Button>
           <button
