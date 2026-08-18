@@ -2,16 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // IONOS Deploy Now (y cualquier host estático) no ejecutan Node en runtime:
-  // exportamos HTML/CSS/JS plano. La app es 100% cliente, así que esto es válido.
-  // El backend real (auth, BD, WhatsApp, coach IA) irá en hosting con Node aparte.
-  output: "export",
+  // Fase 2: runtime Node (API routes, auth, BD). `standalone` produce un
+  // servidor mínimo (.next/standalone) ideal para el contenedor de producción.
+  output: "standalone",
 
-  // Sin optimizador de imágenes en tiempo de ejecución (no hay servidor Node).
+  // Sin optimizador de imágenes (evita la dependencia nativa `sharp`).
   images: { unoptimized: true },
-
-  // Cada ruta se emite como carpeta/index.html → sirve bien en hosting estático.
-  trailingSlash: true,
 };
 
 export default nextConfig;
