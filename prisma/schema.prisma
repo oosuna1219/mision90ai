@@ -1,0 +1,377 @@
+// Modelo de datos de Misión 90 AI — traducción fiel del handoff
+// ("Modelos de datos"). Postgres + Prisma (arquitectura sugerida del README).
+// Fase 2: base para auth, dashboard, plan, ayuno, hábitos, coach, reportes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  free
+  premium
+}
+
+enum Sex {
+  male
+  female
+}
+
+enum Units {
+  metric
+  imperial
+}
+
+enum WeightSource {
+  manual
+  scale
+}
+
+enum MealSlot {
+  breakfast
+  snack
+  dinner
+}
+
+enum FastingProtocol {
+  P12_12 // 12:12
+  P14_10 // 14:10
+  P16_8 // 16:8
+  P18_6 // 18:6
+}
+
+enum PhotoAngle {
+  front
+  side
+  back
+}
+
+enum ReportPeriod {
+  week
+  month
+  quarter
+}
+
+enum CoachRole {
+  user
+  coach
+}
+
+enum NutritionistStatus {
+  pending
+  active
+  revoked
+}
+
+enum DeviceKind {
+  scale
+  wearable
+}
+
+model User {
+  id               String   @id @default(cuid())
+  name             String
+  email            String   @unique
+  whatsapp         String?
+  passwordHash     String
+  locale           String   @default("es-MX")
+  plan             Plan     @default(free)
+  missionStartDate DateTime @default(now())
+  level            Int      @default(1)
+  points           Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  profile           Profile?
+  settings          Settings?
+  weightLogs        WeightLog[]
+  measurements      Measurement[]
+  photos            ProgressPhoto[]
+  plans             DietPlan[]
+  fastingSessions   FastingSession[]
+  habits            Habit[]
+  waterLogs         WaterLog[]
+  activityLogs      ActivityLog[]
+  reports           Report[]
+  achievements      UserAchievement[]
+  coachMessages     CoachMessage[]
+  nutritionists     NutritionistAccess[] @relation("Client")
+  clients           NutritionistAccess[] @relation("Nutritionist")
+  devices           Device[]
+  sessions          Session[]
+  otpCodes          OtpCode[]
+}
+
+// Sesión JWT httpOnly: guardamos un jti revocable por dispositivo.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenId   String   @unique
+  userAgent String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+// Código OTP de WhatsApp (6 dígitos, expira en 10 min).
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  whatsapp  String
+  codeHash  String
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([whatsapp])
+}
+
+model Profile {
+  id                String        @id @default(cuid())
+  userId            String        @unique
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sex               Sex
+  birthdate         DateTime
+  heightCm          Float
+  activityLevel     Int // 1..5
+  conditions        String[]
+  allergies         String[]
+  preferences       String[]
+  goalWeightKg      Float
+  fastingExperience String?
+  units             Units         @default(metric)
+}
+
+model WeightLog {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime
+  weightKg   Float
+  bodyFatPct Float?
+  source     WeightSource @default(manual)
+
+  @@index([userId, date])
+}
+
+model Measurement {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date     DateTime
+  waistCm  Float?
+  hipCm    Float?
+  chestCm  Float?
+  armCm    Float?
+  thighCm  Float?
+  neckCm   Float?
+
+  @@index([userId, date])
+}
+
+model ProgressPhoto {
+  id      String     @id @default(cuid())
+  userId  String
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date    DateTime
+  week    Int
+  angle   PhotoAngle
+  url     String // bucket privado, URL firmada de corta duración
+
+  @@index([userId, week])
+}
+
+model DietPlan {
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week             Int
+  dietType         String          @default("keto")
+  fastingProtocol  FastingProtocol @default(P16_8)
+  kcalTarget       Int
+  carbsG           Int
+  proteinG         Int
+  fatG             Int
+  waterTargetL     Float
+  generatedAt      DateTime        @default(now())
+  days             PlanDay[]
+}
+
+model PlanDay {
+  id        String  @id @default(cuid())
+  planId    String
+  plan      DietPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  dayIndex  Int // 0..6
+  kcal      Int
+  carbsG    Int
+  proteinG  Int
+  fatG      Int
+  meals     Meal[]
+}
+
+model Meal {
+  id        String   @id @default(cuid())
+  planDayId String
+  planDay   PlanDay  @relation(fields: [planDayId], references: [id], onDelete: Cascade)
+  slot      MealSlot
+  kcal      Int
+  carbsG    Int
+  proteinG  Int
+  fatG      Int
+  items     Json // [{ name, grams }]
+}
+
+model FastingSession {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  protocol    FastingProtocol
+  startedAt   DateTime
+  endedAt     DateTime?
+  targetHours Int
+  completed   Boolean         @default(false)
+
+  @@index([userId, startedAt])
+}
+
+model Habit {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  icon          String?
+  active        Boolean    @default(true)
+  targetPerWeek Int        @default(7)
+  logs          HabitLog[]
+}
+
+model HabitLog {
+  id      String   @id @default(cuid())
+  habitId String
+  habit   Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date    DateTime
+  done    Boolean  @default(false)
+
+  @@unique([habitId, date])
+}
+
+model WaterLog {
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date    DateTime
+  glasses Int      @default(0) // vasos de 250 ml
+
+  @@unique([userId, date])
+}
+
+model ActivityLog {
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date    DateTime
+  minutes Int
+  type    String?
+
+  @@index([userId, date])
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period     ReportPeriod
+  rangeStart DateTime
+  rangeEnd   DateTime
+  kpis       Json
+  summary    String
+  generatedAt DateTime    @default(now())
+
+  @@index([userId, period])
+}
+
+model Achievement {
+  id          String            @id @default(cuid())
+  key         String            @unique
+  name        String
+  description  String
+  points      Int
+  iconKey     String
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  unlockedAt    DateTime    @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+model CoachMessage {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        CoachRole
+  text        String
+  contextRefs Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model NutritionistAccess {
+  id             String             @id @default(cuid())
+  userId         String // el cliente dueño de la cuenta
+  user           User               @relation("Client", fields: [userId], references: [id], onDelete: Cascade)
+  nutritionistId String
+  nutritionist   User               @relation("Nutritionist", fields: [nutritionistId], references: [id], onDelete: Cascade)
+  status         NutritionistStatus @default(pending)
+  // Permisos granulares e independientes (evaluados en el servidor).
+  viewWeight     Boolean            @default(false)
+  viewPhotos     Boolean            @default(false)
+  viewMeals      Boolean            @default(false)
+  editPlan       Boolean            @default(false)
+  editFasting    Boolean            @default(false)
+  viewReports    Boolean            @default(false)
+  writeNotes     Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+
+  @@unique([userId, nutritionistId])
+}
+
+model Device {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind       DeviceKind
+  brand      String
+  connected  Boolean    @default(false)
+  lastSyncAt DateTime?
+}
+
+model Settings {
+  id                 String  @id @default(cuid())
+  userId             String  @unique
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifyWeighIn      Boolean @default(true)
+  notifyWater        Boolean @default(true)
+  notifyFastStart    Boolean @default(true)
+  notifyFastEnd      Boolean @default(true)
+  notifyWeeklySummary Boolean @default(true)
+  notifyCoach        Boolean @default(true)
+  notifyProduct      Boolean @default(false)
+  units              Units   @default(metric)
+  language           String  @default("es")
+  darkMode           Boolean @default(false)
+}
