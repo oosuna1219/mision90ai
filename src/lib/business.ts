@@ -177,6 +177,38 @@ export function pointsToNextLevel(points: number): { current: number; next: numb
   return { current, next, pct };
 }
 
+/**
+ * Racha: días naturales consecutivos con al menos un registro (peso o hábito).
+ * Cuenta hacia atrás desde hoy; si el registro más reciente no es hoy ni ayer,
+ * la racha es 0. (TZ: usa la fecha local del servidor; afinar por usuario luego.)
+ */
+export function computeStreak(dates: Date[]): number {
+  if (!dates.length) return 0;
+  const key = (d: Date) => {
+    const x = new Date(d);
+    return `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  };
+  const set = new Set(dates.map(key));
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  // La racha solo cuenta si hay registro hoy o ayer.
+  if (!set.has(key(today)) && !set.has(key(yesterday))) return 0;
+
+  let streak = 0;
+  const cursor = new Date(today);
+  // Si no hay registro hoy pero sí ayer, empieza desde ayer.
+  if (!set.has(key(today))) cursor.setDate(cursor.getDate() - 1);
+  while (set.has(key(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
 export const POINTS = {
   weightLog: 10,
   habitDone: 5,

@@ -1,20 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { NAV, PRIMARY_NAV, navByHref } from "@/lib/nav";
-import { mockUser, mockDashboard } from "@/lib/mock";
+import { useCurrentUser, type Me } from "@/lib/useCurrentUser";
+import { daysBetween, formatLongDate } from "@/lib/date";
 import { Logo } from "@/components/ui/Logo";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { IconBell, IconClose, IconMenu, IconSearch } from "@/components/icons";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const active = navByHref(pathname);
+  const { user, loading } = useCurrentUser();
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+
+  // Gate: sin sesión → login (una vez resuelto /me).
+  useEffect(() => {
+    if (!loading && !user) router.push("/login");
+  }, [loading, user, router]);
 
   // README: abrir el drawer cierra notificaciones y viceversa; navegar cierra ambos.
   const openNav = () => {
@@ -30,15 +38,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setNotifOpen(false);
   };
 
+  const missionDay = user
+    ? Math.max(1, daysBetween(new Date(user.missionStartDate), new Date()) + 1)
+    : null;
   const subtitle =
-    active.route === 0
-      ? `${mockDashboard.date} · día ${mockDashboard.missionDay} de 90`
+    active.route === 0 && missionDay
+      ? `${formatLongDate()} · día ${missionDay} de 90`
       : undefined;
 
   return (
     <div className="min-h-screen bg-bg-app lg:flex">
       {/* Desktop / tablet sidebar */}
-      <Sidebar activeHref={active.href} />
+      <Sidebar activeHref={active.href} user={user} />
 
       <div className="flex min-h-screen flex-1 flex-col">
         <TopBar
@@ -72,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 /* ------------------------------------------------------------------ Sidebar */
 
-function Sidebar({ activeHref }: { activeHref: string }) {
+function Sidebar({ activeHref, user }: { activeHref: string; user: Me | null }) {
   return (
     <aside className="sticky top-0 hidden h-screen w-[204px] shrink-0 flex-col bg-ink-deep px-3.5 py-6 lg:flex xl:w-[252px] xl:px-[18px]">
       <div className="px-2">
@@ -83,7 +94,7 @@ function Sidebar({ activeHref }: { activeHref: string }) {
           <SidebarLink key={item.href} item={item} active={item.href === activeHref} />
         ))}
       </nav>
-      <UserChip />
+      <UserChip user={user} />
     </aside>
   );
 }
@@ -113,15 +124,17 @@ function SidebarLink({
   );
 }
 
-function UserChip() {
+function UserChip({ user }: { user: Me | null }) {
+  const name = user?.name ?? "…";
+  const plan = user?.plan ?? "free";
   return (
     <div className="mt-4 flex items-center gap-3 rounded-field bg-white/[0.05] px-3 py-2.5">
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-[13px] font-extrabold text-white">
-        {initials(mockUser.name)}
+        {user ? initials(user.name) : "·"}
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[13px] font-bold text-white">{mockUser.name}</p>
-        <p className="truncate text-[12px] text-on-dark capitalize">Plan {mockUser.plan}</p>
+        <p className="truncate text-[13px] font-bold text-white">{name}</p>
+        <p className="truncate text-[12px] text-on-dark capitalize">Plan {plan}</p>
       </div>
     </div>
   );
