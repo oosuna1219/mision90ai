@@ -1,46 +1,115 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Segmented } from "@/components/ui/Segmented";
 import { WeightSparkline } from "@/components/dashboard/WeightSparkline";
 import { IconCamera } from "@/components/icons";
+import {
+  DashboardEmpty,
+  DashboardError,
+  DashboardSkeleton,
+} from "@/components/dashboard/DashboardStates";
 import { cn } from "@/lib/cn";
 
-// Cada rango tiene su curva y su bloque de 4 KPIs (README "Mi progreso").
+interface Weight { date: string; weightKg: number }
+interface Measurement {
+  date: string;
+  waistCm: number | null; hipCm: number | null; chestCm: number | null;
+  armCm: number | null; thighCm: number | null; neckCm: number | null;
+}
+
 const RANGES = [
-  { label: "7 d", drop: "−1.4 kg", avg: "−1.4 kg", logs: "6", waist: "−1.5 cm",
-    series: [98.0, 97.7, 97.8, 97.4, 97.1, 96.9, 96.4] },
-  { label: "30 d", drop: "−4.6 kg", avg: "−0.9 kg", logs: "18", waist: "−4.0 cm",
-    series: [101.0, 100.4, 99.8, 99.1, 98.6, 98.0, 97.6, 97.1, 96.8, 96.4] },
-  { label: "3 m", drop: "−11.2 kg", avg: "−0.8 kg", logs: "47", waist: "−13.0 cm",
-    series: [107.6, 105.9, 104.2, 102.5, 101.0, 99.6, 98.3, 97.2, 96.4] },
-  { label: "6 m", drop: "−11.2 kg", avg: "−0.5 kg", logs: "47", waist: "−13.0 cm",
-    series: [108.4, 106.6, 104.6, 102.6, 100.8, 99.2, 98.0, 97.0, 96.4] },
-  { label: "1 año", drop: "−11.2 kg", avg: "−0.3 kg", logs: "47", waist: "−13.0 cm",
-    series: [108.9, 107.2, 105.1, 103.0, 101.1, 99.4, 98.0, 97.0, 96.4] },
-  { label: "Todo", drop: "−11.2 kg", avg: "−0.8 kg", logs: "47", waist: "−13.0 cm",
-    series: [107.6, 105.2, 103.1, 101.2, 99.5, 98.1, 97.0, 96.4] },
+  { label: "7 d", days: 7 },
+  { label: "30 d", days: 30 },
+  { label: "3 m", days: 90 },
+  { label: "6 m", days: 180 },
+  { label: "1 año", days: 365 },
+  { label: "Todo", days: Infinity },
 ];
 
-const MEASURES = [
-  { name: "Cintura", start: 118, now: 105 },
-  { name: "Cadera", start: 122, now: 112 },
-  { name: "Pecho", start: 118, now: 110 },
-  { name: "Brazo", start: 40, now: 37 },
-  { name: "Muslo", start: 68, now: 63 },
-  { name: "Cuello", start: 45, now: 42 },
+const MEASURE_FIELDS: { key: keyof Measurement; name: string }[] = [
+  { key: "waistCm", name: "Cintura" },
+  { key: "hipCm", name: "Cadera" },
+  { key: "chestCm", name: "Pecho" },
+  { key: "armCm", name: "Brazo" },
+  { key: "thighCm", name: "Muslo" },
+  { key: "neckCm", name: "Cuello" },
 ];
 
-const PHOTO_WEEKS = [1, 2, 3, 4];
+type UI = "load" | "ok" | "empty" | "err";
 
 export default function ProgresoPage() {
-  const [range, setRange] = useState(2); // "3 m" por defecto
-  const r = RANGES[range];
+  const router = useRouter();
+  const [ui, setUi] = useState<UI>("load");
+  const [weights, setWeights] = useState<Weight[]>([]);
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [range, setRange] = useState(2);
+
+  const load = useCallback(async () => {
+    setUi("load");
+    try {
+      const res = await fetch("/api/progress", { cache: "no-store" });
+      if (res.status === 401) return router.push("/login");
+      const d = await res.json().catch(() => ({}));
+      if (d.empty) return setUi("empty");
+      if (!res.ok || !d.weights) return setUi("err");
+      setWeights(d.weights);
+      setMeasurements(d.measurements ?? []);
+      setUi("ok");
+    } catch {
+      setUi("err");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rangeData = useMemo(() => {
+    const days = RANGES[range].days;
+    const cutoff = days === Infinity ? 0 : Date.now() - days * 864e5;
+    const w = weights.filter((x) => new Date(x.date).getTime() >= cutoff);
+    const series = w.map((x) => x.weightKg);
+    const m = measurements.filter((x) => new Date(x.date).getTime() >= cutoff);
+
+    const fmt = (n: number, unit: string) => `${n > 0 ? "+" : ""}${n.toFixed(1)} ${unit}`;
+    let lost = "—", avg = "—", waist = "—";
+    if (w.length >= 2) {
+      const delta = w[w.length - 1].weightKg - w[0].weightKg;
+      lost = fmt(delta, "kg");
+      const spanDays = (new Date(w[w.length - 1].date).getTime() - new Date(w[0].date).getTime()) / 864e5;
+      const weeks = Math.max(1, spanDays / 7);
+      avg = fmt(delta / weeks, "kg");
+    }
+    const withWaist = m.filter((x) => x.waistCm != null);
+    if (withWaist.length >= 2) {
+      waist = fmt((withWaist[withWaist.length - 1].waistCm! - withWaist[0].waistCm!), "cm");
+    }
+    return { series, lost, avg, logs: String(w.length), waist };
+  }, [weights, measurements, range]);
+
+  const measureRows = useMemo(() => {
+    if (measurements.length === 0) return [];
+    const first = measurements[0];
+    const last = measurements[measurements.length - 1];
+    return MEASURE_FIELDS.map((f) => {
+      const start = first[f.key] as number | null;
+      const now = last[f.key] as number | null;
+      const delta = start != null && now != null ? now - start : null;
+      return { name: f.name, start, now, delta };
+    }).filter((r) => r.now != null);
+  }, [measurements]);
+
+  if (ui === "load") return <DashboardSkeleton />;
+  if (ui === "empty") return <DashboardEmpty />;
+  if (ui === "err") return <DashboardError onRetry={load} />;
+
+  const r = rangeData;
 
   return (
     <div className="flex flex-col gap-[18px]">
-      {/* Gráfica + rangos */}
       <Card>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <CardEyebrow>Evolución del peso</CardEyebrow>
@@ -51,60 +120,68 @@ export default function ProgresoPage() {
             options={RANGES.map((rr, i) => ({ value: i, label: rr.label }))}
           />
         </div>
-        <WeightSparkline series={r.series} height={200} />
+        <WeightSparkline
+          series={r.series.length > 1 ? r.series : [r.series[0] ?? 0, r.series[0] ?? 0]}
+          height={200}
+        />
         <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi label="Peso perdido" value={r.drop} />
+          <Kpi label="Peso perdido" value={r.lost} />
           <Kpi label="Promedio semanal" value={r.avg} />
           <Kpi label="Registros" value={r.logs} />
           <Kpi label="Cintura" value={r.waist} />
         </div>
       </Card>
 
-      {/* Tabla de medidas */}
       <Card>
         <CardEyebrow>Medidas corporales (cm)</CardEyebrow>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[420px] border-collapse text-[14px]">
-            <thead>
-              <tr className="text-left text-[12px] font-bold uppercase tracking-[0.06em] text-muted">
-                <th className="py-2 pr-4 font-bold">Medida</th>
-                <th className="py-2 pr-4 font-bold">Inicial</th>
-                <th className="py-2 pr-4 font-bold">Actual</th>
-                <th className="py-2 font-bold">Cambio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MEASURES.map((m) => {
-                const delta = m.now - m.start;
-                return (
+        {measureRows.length === 0 ? (
+          <p className="mt-3 text-[14px] text-body">
+            Aún no registras medidas. Cuando agregues cintura, cadera, etc., verás tu cambio aquí.
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[420px] border-collapse text-[14px]">
+              <thead>
+                <tr className="text-left text-[12px] font-bold uppercase tracking-[0.06em] text-muted">
+                  <th className="py-2 pr-4 font-bold">Medida</th>
+                  <th className="py-2 pr-4 font-bold">Inicial</th>
+                  <th className="py-2 pr-4 font-bold">Actual</th>
+                  <th className="py-2 font-bold">Cambio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {measureRows.map((m) => (
                   <tr key={m.name} className="border-t border-border transition-colors hover:bg-bg-app">
                     <td className="py-3 pr-4 font-semibold text-ink">{m.name}</td>
-                    <td className="py-3 pr-4 text-body">{m.start}</td>
+                    <td className="py-3 pr-4 text-body">{m.start ?? "—"}</td>
                     <td className="py-3 pr-4 font-bold text-ink">{m.now}</td>
                     <td className="py-3">
-                      <span
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-[13px] font-bold",
-                          delta <= 0 ? "bg-success/15 text-success" : "bg-accent/15 text-accent",
-                        )}
-                      >
-                        {delta > 0 ? "+" : ""}
-                        {delta} cm
-                      </span>
+                      {m.delta != null ? (
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[13px] font-bold",
+                            m.delta <= 0 ? "bg-success/15 text-success" : "bg-accent/15 text-accent",
+                          )}
+                        >
+                          {m.delta > 0 ? "+" : ""}
+                          {m.delta} cm
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
-      {/* Galería de fotos */}
       <Card>
         <CardEyebrow>Fotos de progreso</CardEyebrow>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {PHOTO_WEEKS.map((w) => (
+          {[1, 2, 3, 4].map((w) => (
             <button
               key={w}
               className="group flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-card border-[1.5px] border-dashed border-border-input bg-bg-app text-muted transition-colors hover:border-primary hover:text-primary"
@@ -115,7 +192,7 @@ export default function ProgresoPage() {
           ))}
         </div>
         <p className="mt-3 text-[13px] text-body">
-          Sube una foto por semana (frente, lado y espalda). Se guardan privadas, nunca públicas.
+          La subida de fotos (almacenamiento privado) llega en la siguiente fase.
         </p>
       </Card>
     </div>
