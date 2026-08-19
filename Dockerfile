@@ -1,17 +1,31 @@
-# --- Etapa 1: build (Node solo en build-time) ---
-FROM node:20-alpine AS build
+# Fase 2 — imagen Node (runtime real: SSR, API routes, Prisma, auth).
+# Debian slim (glibc) para máxima compatibilidad con los engines de Prisma.
+
+# ---- build ----
+FROM node:20-bookworm-slim AS build
 WORKDIR /app
-
-# Sin package-lock.json en el repo todavía → npm install (genera el lock en build).
-COPY package.json ./
-RUN npm install
-
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
-# next.config.mjs tiene output:"export" → genera /app/out (HTML/CSS/JS estático).
+RUN npx prisma generate
 RUN npm run build
 
-# --- Etapa 2: servir estático con nginx (imagen mínima, sin Node en runtime) ---
-FROM nginx:alpine
-COPY --from=build /app/out /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+# ---- run ----
+FROM node:20-bookworm-slim AS run
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+ENV NODE_ENV=production
+ENV PORT=3000
+
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/next.config.mjs ./next.config.mjs
+COPY docker/entrypoint.sh ./docker/entrypoint.sh
+
+EXPOSE 3000
+# Aplica migraciones y arranca el servidor.
+CMD ["sh", "./docker/entrypoint.sh"]
