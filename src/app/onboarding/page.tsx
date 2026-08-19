@@ -67,11 +67,22 @@ const INITIAL: OnboardingState = {
   habits: [],
 };
 
+type PlanResult = {
+  macros: { kcal: number; carbsG: number; proteinG: number; fatG: number };
+  imc: number;
+  imcCat: string;
+  waterL: number;
+  waterGlasses: number;
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [done, setDone] = useState(false);
   const [s, setS] = useState<OnboardingState>(INITIAL);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [serverPlan, setServerPlan] = useState<PlanResult | null>(null);
 
   const set = <K extends keyof OnboardingState>(k: K, v: OnboardingState[K]) =>
     setS((prev) => ({ ...prev, [k]: v }));
@@ -94,15 +105,43 @@ export default function OnboardingPage() {
     };
   }, [s]);
 
+  async function generate() {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(s),
+      });
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSubmitError(data.error ?? "No pudimos generar tu plan.");
+        return;
+      }
+      // El plan viene del servidor (fuente de verdad); si faltara, usa el local.
+      setServerPlan((data.plan as PlanResult) ?? plan);
+      setDone(true);
+    } catch {
+      setSubmitError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function next() {
-    if (step >= STEPS.length) setDone(true);
+    if (step >= STEPS.length) generate();
     else setStep((v) => v + 1);
   }
   function back() {
     setStep((v) => Math.max(1, v - 1));
   }
 
-  if (done) return <GeneratedPlan plan={plan} onEnter={() => router.push("/")} />;
+  if (done) return <GeneratedPlan plan={serverPlan ?? plan} onEnter={() => router.push("/")} />;
 
   return (
     <div className="grid flex-1 gap-8 py-4 md:grid-cols-[300px_1fr] md:gap-12">
@@ -171,16 +210,27 @@ export default function OnboardingPage() {
           <StepBody step={step} s={s} set={set} />
         </div>
 
+        {submitError ? (
+          <p role="alert" className="mt-4 text-[13px] font-semibold text-accent">
+            {submitError}
+          </p>
+        ) : null}
+
         <div className="mt-6 flex items-center justify-between">
           <Button
             variant="ghost"
             onClick={back}
+            disabled={submitting}
             className={cn("!text-on-dark-2 hover:!text-white", step === 1 && "invisible")}
           >
             Atrás
           </Button>
-          <Button onClick={next}>
-            {step >= STEPS.length ? "Generar mi plan" : "Continuar"}
+          <Button onClick={next} disabled={submitting}>
+            {step >= STEPS.length
+              ? submitting
+                ? "Generando…"
+                : "Generar mi plan"
+              : "Continuar"}
           </Button>
         </div>
       </div>
