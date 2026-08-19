@@ -93,11 +93,11 @@ export async function askCoach(userId: string, history: CoachTurn[]): Promise<st
     content: m.text,
   }));
 
+  // Sin `effort` para ser compatible con cualquier modelo (Haiku no lo soporta).
   const res = await client.messages.create({
     model: COACH_MODEL,
     max_tokens: 1024,
     system: systemPrompt(ctx),
-    output_config: { effort: "low" },
     messages,
   });
 
