@@ -1,100 +1,118 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardEyebrow } from "@/components/ui/Card";
+import {
+  DashboardEmpty,
+  DashboardError,
+  DashboardSkeleton,
+} from "@/components/dashboard/DashboardStates";
 import { cn } from "@/lib/cn";
 
-const DAYS = [
-  { short: "L", name: "Lunes 18" },
-  { short: "M", name: "Martes 19" },
-  { short: "M", name: "Miércoles 20" },
-  { short: "J", name: "Jueves 21" },
-  { short: "V", name: "Viernes 22" },
-  { short: "S", name: "Sábado 23" },
-  { short: "D", name: "Domingo 24" },
+interface Plan {
+  week: number; dietType: string; protocol: string;
+  kcal: number; carbsG: number; proteinG: number; fatG: number; waterTargetL: number;
+}
+
+const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+// Menú de ejemplo (keto) mientras se genera el menú personalizado por día.
+const SAMPLE_MEALS = [
+  { slot: "Desayuno", time: "11:00", items: "3 huevos · espinaca · ½ aguacate · 150 g pollo" },
+  { slot: "Colación", time: "15:00", items: "Queso manchego 30 g · almendras 20 g" },
+  { slot: "Cena", time: "18:30", items: "200 g carne asada · ensalada · brócoli · aceite de oliva" },
 ];
 
-// Datos del prototipo (README "Plan y menú").
-const MENU = [
-  { a: "3 huevos · espinaca · ½ aguacate · 150 g pollo", b: "Queso manchego 30 g · almendras 20 g", c: "200 g carne asada · ensalada · brócoli · aceite de oliva", kcal: 1594, carbs: 24, prot: 138, fat: 112 },
-  { a: "Omelette de 3 huevos con champiñones · 40 g queso", b: "Nueces 20 g", c: "180 g salmón · calabacita salteada · ensalada verde", kcal: 1612, carbs: 21, prot: 129, fat: 118 },
-  { a: "200 g pechuga de pollo · aguacate · espinaca", b: "Sin colación", c: "Bistec 200 g · coliflor rostizada · mantequilla", kcal: 1571, carbs: 19, prot: 145, fat: 105 },
-  { a: "2 huevos · tocino 40 g · aguacate", b: "Aceitunas 10 piezas", c: "200 g camarones al ajillo · ensalada de pepino", kcal: 1583, carbs: 22, prot: 132, fat: 110 },
-  { a: "Ensalada de atún con mayonesa y apio", b: "Queso panela 40 g", c: "250 g arrachera · nopales asados · guacamole", kcal: 1648, carbs: 26, prot: 141, fat: 116 },
-  { a: "Huevos revueltos con chorizo · aguacate", b: "Almendras 20 g", c: "Pollo al horno con hierbas · brócoli con mantequilla", kcal: 1667, carbs: 23, prot: 136, fat: 121 },
-  { a: "Café con crema · 3 huevos cocidos · aguacate", b: "Sin colación", c: "Pescado a la plancha · ensalada mixta · aceite de oliva", kcal: 1542, carbs: 20, prot: 127, fat: 109 },
-];
-
-const MEALS: { key: "a" | "b" | "c"; slot: string; time: string }[] = [
-  { key: "a", slot: "Desayuno", time: "11:00" },
-  { key: "b", slot: "Colación", time: "15:00" },
-  { key: "c", slot: "Cena", time: "18:30" },
-];
+type UI = "load" | "ok" | "empty" | "err";
 
 export default function PlanPage() {
+  const router = useRouter();
+  const [ui, setUi] = useState<UI>("load");
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [day, setDay] = useState(0);
-  const d = MENU[day];
+
+  const load = useCallback(async () => {
+    setUi("load");
+    try {
+      const res = await fetch("/api/plan", { cache: "no-store" });
+      if (res.status === 401) return router.push("/login");
+      const d = await res.json().catch(() => ({}));
+      if (d.empty) return setUi("empty");
+      if (!res.ok || !d.plan) return setUi("err");
+      setPlan(d.plan);
+      setUi("ok");
+    } catch {
+      setUi("err");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (ui === "load") return <DashboardSkeleton />;
+  if (ui === "empty") return <DashboardEmpty />;
+  if (ui === "err" || !plan) return <DashboardError onRetry={load} />;
 
   return (
     <div className="flex flex-col gap-[18px]">
       <Card>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardEyebrow>Plan de la semana</CardEyebrow>
-            <p className="text-[17px] font-extrabold text-ink">Keto + 16:8 · semana 4</p>
-          </div>
-        </div>
-        {/* Selector de 7 días */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          {DAYS.map((dd, i) => {
-            const active = day === i;
-            return (
-              <button
-                key={i}
-                onClick={() => setDay(i)}
-                className={cn(
-                  "flex min-w-[44px] flex-col items-center gap-0.5 rounded-field border px-3 py-2 transition-colors",
-                  active
-                    ? "border-ink bg-ink text-surface"
-                    : "border-border bg-surface text-body hover:border-body",
-                )}
-              >
-                <span className="text-[11px] font-bold uppercase">{dd.short}</span>
-                <span className="text-[15px] font-extrabold">{dd.name.split(" ")[1]}</span>
-              </button>
-            );
-          })}
+        <CardEyebrow>Plan de la semana</CardEyebrow>
+        <p className="text-[17px] font-extrabold capitalize text-ink">
+          {plan.dietType} + {plan.protocol} · semana {plan.week}
+        </p>
+        <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1">
+          {DAYS.map((d, i) => (
+            <button
+              key={i}
+              onClick={() => setDay(i)}
+              className={cn(
+                "min-w-[52px] rounded-field border px-3 py-2 text-[13px] font-bold transition-colors",
+                day === i ? "border-ink bg-ink text-surface" : "border-border bg-surface text-body hover:border-body",
+              )}
+            >
+              {d}
+            </button>
+          ))}
         </div>
       </Card>
 
-      {/* Comidas del día */}
       <div className="grid gap-[18px] lg:grid-cols-[1.5fr_1fr]">
         <div className="flex flex-col gap-[14px]">
-          {MEALS.map((m) => (
-            <Card key={m.key}>
+          {SAMPLE_MEALS.map((m) => (
+            <Card key={m.slot}>
               <div className="flex items-baseline justify-between">
                 <p className="text-[17px] font-extrabold text-ink">{m.slot}</p>
                 <span className="text-[13px] font-bold text-muted">{m.time}</span>
               </div>
-              <p className="mt-2 text-[15px] leading-[1.6] text-body">{d[m.key]}</p>
+              <p className="mt-2 text-[15px] leading-[1.6] text-body">{m.items}</p>
             </Card>
           ))}
+          <p className="text-[13px] text-body">
+            Menú de ejemplo. La generación del menú personalizado por día (con la IA) llega pronto.
+          </p>
         </div>
 
-        {/* Macros del día */}
         <Card className="h-fit">
-          <CardEyebrow>Total del día</CardEyebrow>
+          <CardEyebrow>Objetivo diario</CardEyebrow>
           <p className="text-[34px] font-extrabold tracking-[-0.02em] text-ink">
-            {d.kcal.toLocaleString("es-MX")}
+            {plan.kcal.toLocaleString("es-MX")}
             <span className="ml-1 text-[16px] font-bold text-body">kcal</span>
           </p>
           <div className="mt-4 grid grid-cols-3 gap-3">
-            <Macro label="Carbos" value={d.carbs} />
-            <Macro label="Proteína" value={d.prot} />
-            <Macro label="Grasa" value={d.fat} />
+            <Macro label="Carbos" value={plan.carbsG} />
+            <Macro label="Proteína" value={plan.proteinG} />
+            <Macro label="Grasa" value={plan.fatG} />
           </div>
+          <p className="mt-4 text-[13px] text-body">Meta de agua: {plan.waterTargetL.toFixed(1)} L/día</p>
         </Card>
       </div>
+
+      <p className="text-center text-[12px] text-muted">
+        <Link href="/coach" className="font-bold text-primary">Pídele al coach</Link> que ajuste tu menú o arme tu lista de compras.
+      </p>
     </div>
   );
 }

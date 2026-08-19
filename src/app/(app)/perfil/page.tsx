@@ -1,31 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Switch } from "@/components/ui/Switch";
-import { mockUser } from "@/lib/mock";
+import { DashboardError, DashboardSkeleton } from "@/components/dashboard/DashboardStates";
 import { cn } from "@/lib/cn";
 
-// Permisos granulares e independientes del nutriólogo (README "Perfil").
-const PERMISSIONS = [
-  { key: "viewWeight", label: "Ver peso y medidas", on: true },
-  { key: "viewPhotos", label: "Ver fotos de progreso", on: false },
-  { key: "viewMeals", label: "Ver registros de comida", on: true },
-  { key: "editPlan", label: "Editar el plan", on: true },
-  { key: "editFasting", label: "Editar protocolo de ayuno", on: false },
-  { key: "viewReports", label: "Ver reportes", on: true },
-  { key: "writeNotes", label: "Escribir notas", on: true },
-];
+interface ProfileData {
+  user: { name: string; email: string; whatsapp: string | null; plan: string; level: number; points: number; missionDay: number };
+  profile: { goalWeightKg: number; heightCm: number; units: string } | null;
+  nutritionists: {
+    id: string; name: string; status: string;
+    permissions: Record<string, boolean>;
+  }[];
+  devices: { id: string; kind: string; brand: string; connected: boolean; lastSyncAt: string | null }[];
+}
 
-const DEVICES = [
-  { icon: "⚖️", name: "Báscula Bluetooth", brand: "Renpho ES-CS20M", connected: true, sync: "hace 3 h" },
-  { icon: "⌚", name: "Wearable", brand: "Apple Watch SE", connected: true, sync: "hace 12 min" },
-  { icon: "💍", name: "Anillo de sueño", brand: "Oura Gen3", connected: false, sync: "—" },
-];
+const PERM_LABELS: Record<string, string> = {
+  viewWeight: "Ver peso y medidas", viewPhotos: "Ver fotos", viewMeals: "Ver comidas",
+  editPlan: "Editar el plan", editFasting: "Editar ayuno", viewReports: "Ver reportes", writeNotes: "Escribir notas",
+};
+
+type UI = "load" | "ok" | "err";
 
 export default function PerfilPage() {
-  const [perms, setPerms] = useState(PERMISSIONS);
+  const router = useRouter();
+  const [ui, setUi] = useState<UI>("load");
+  const [data, setData] = useState<ProfileData | null>(null);
+
+  const load = useCallback(async () => {
+    setUi("load");
+    try {
+      const res = await fetch("/api/profile", { cache: "no-store" });
+      if (res.status === 401) return router.push("/login");
+      const d = await res.json().catch(() => null);
+      if (!res.ok || !d) return setUi("err");
+      setData(d as ProfileData);
+      setUi("ok");
+    } catch {
+      setUi("err");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (ui === "load") return <DashboardSkeleton />;
+  if (ui === "err" || !data) return <DashboardError onRetry={load} />;
+
+  const u = data.user;
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -33,21 +58,21 @@ export default function PerfilPage() {
       <Card>
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-[22px] font-extrabold text-white">
-            {mockUser.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+            {u.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[20px] font-extrabold text-ink">{mockUser.name}</p>
-            <p className="text-[14px] text-body">{mockUser.email}</p>
+            <p className="text-[20px] font-extrabold text-ink">{u.name}</p>
+            <p className="text-[14px] text-body">{u.email}</p>
           </div>
           <span className="rounded-full bg-primary-soft px-3 py-1 text-[13px] font-bold capitalize text-primary">
-            Plan {mockUser.plan}
+            Plan {u.plan}
           </span>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Día de misión" value={`${mockUser.missionDay} / 90`} />
-          <Stat label="Nivel" value={`Nivel ${mockUser.level}`} />
-          <Stat label="Puntos" value={mockUser.points.toLocaleString("es-MX")} />
-          <Stat label="WhatsApp" value={mockUser.whatsapp} />
+          <Stat label="Día de misión" value={`${u.missionDay} / 90`} />
+          <Stat label="Nivel" value={`Nivel ${u.level}`} />
+          <Stat label="Puntos" value={u.points.toLocaleString("es-MX")} />
+          <Stat label="WhatsApp" value={u.whatsapp ?? "—"} />
         </div>
       </Card>
 
@@ -55,62 +80,56 @@ export default function PerfilPage() {
       <Card>
         <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
           <CardEyebrow>Acceso de nutriólogo</CardEyebrow>
-          <Button variant="secondary" className="!px-4 !py-2 text-[13px]">
-            Invitar profesional
-          </Button>
+          <Button variant="secondary" className="!px-4 !py-2 text-[13px]">Invitar profesional</Button>
         </div>
-        <p className="mb-4 text-[14px] leading-[1.6] text-body">
-          Otorga permisos independientes. Revocar el acceso cierra sus sesiones al instante.
-        </p>
-        <ul className="flex flex-col divide-y divide-border">
-          {perms.map((p, i) => (
-            <li key={p.key} className="flex items-center justify-between py-3">
-              <span className="text-[15px] font-semibold text-ink">{p.label}</span>
-              <Switch
-                checked={p.on}
-                label={p.label}
-                onChange={(v) =>
-                  setPerms((prev) => {
-                    const next = prev.slice();
-                    next[i] = { ...next[i], on: v };
-                    return next;
-                  })
-                }
-              />
-            </li>
-          ))}
-        </ul>
+        {data.nutritionists.length === 0 ? (
+          <p className="text-[14px] leading-[1.6] text-body">
+            No has invitado a ningún profesional. Al invitar a un nutriólogo podrás otorgarle permisos
+            granulares (ver peso, editar el plan, escribir notas) y revocarlos al instante.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {data.nutritionists.map((n) => (
+              <div key={n.id} className="rounded-card border border-border bg-bg-app p-4">
+                <p className="text-[15px] font-bold text-ink">{n.name} · {n.status}</p>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {Object.entries(n.permissions).filter(([, v]) => v).map(([k]) => (
+                    <li key={k} className="rounded-full bg-primary-soft px-2.5 py-1 text-[12px] font-bold text-primary">
+                      {PERM_LABELS[k] ?? k}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* Dispositivos conectados */}
       <Card>
         <CardEyebrow>Dispositivos conectados</CardEyebrow>
-        <ul className="mt-3 flex flex-col gap-2.5">
-          {DEVICES.map((d) => (
-            <li
-              key={d.name}
-              className="flex items-center gap-3 rounded-field border border-border bg-bg-app px-4 py-3"
-            >
-              <span className="text-2xl" aria-hidden>{d.icon}</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-bold text-ink">{d.name}</p>
-                <p className="text-[13px] text-body">{d.brand}</p>
-              </div>
-              <div className="text-right">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-[13px] font-bold",
-                    d.connected ? "text-success" : "text-muted",
-                  )}
-                >
+        {data.devices.length === 0 ? (
+          <p className="mt-2 text-[14px] leading-[1.6] text-body">
+            Aún no conectas dispositivos. Podrás vincular una báscula Bluetooth o un wearable para
+            sincronizar tu peso y actividad automáticamente.
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2.5">
+            {data.devices.map((d) => (
+              <li key={d.id} className="flex items-center gap-3 rounded-field border border-border bg-bg-app px-4 py-3">
+                <span className="text-2xl" aria-hidden>{d.kind === "scale" ? "⚖️" : "⌚"}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-bold text-ink capitalize">{d.kind === "scale" ? "Báscula" : "Wearable"}</p>
+                  <p className="text-[13px] text-body">{d.brand}</p>
+                </div>
+                <span className={cn("inline-flex items-center gap-1.5 text-[13px] font-bold", d.connected ? "text-success" : "text-muted")}>
                   <span className={cn("h-2 w-2 rounded-full", d.connected ? "bg-success" : "bg-border-input")} />
                   {d.connected ? "Conectado" : "Desconectado"}
                 </span>
-                <p className="text-[12px] text-muted">Sinc. {d.sync}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );
